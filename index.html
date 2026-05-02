@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Gestión de Préstamos</title>
+    <style>
+        * { box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+        body { margin: 0; background: #f5f7fb; padding-bottom: 70px; }
+        .navbar { background: #1e3a5f; color: white; padding: 16px; font-size: 20px; font-weight: bold; position: sticky; top: 0; z-index: 10; }
+        .container { padding: 16px; }
+        .card { background: white; border-radius: 20px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .btn { background: #1e3a5f; color: white; border: none; padding: 12px 20px; border-radius: 40px; font-size: 16px; width: 100%; margin-top: 8px; cursor: pointer; }
+        .btn-wsp { background: #25D366; }
+        .input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 12px; font-size: 16px; }
+        .tab-bar { position: fixed; bottom: 0; width: 100%; display: flex; background: white; border-top: 1px solid #ddd; }
+        .tab { flex: 1; text-align: center; padding: 12px; font-size: 12px; color: #555; }
+        .tab.active { color: #1e3a5f; font-weight: bold; }
+        .dashboard-number { font-size: 28px; font-weight: bold; margin: 8px 0; }
+        @media (max-width: 600px) { .container { padding: 12px; } }
+    </style>
+</head>
+<body>
+<div class="navbar">💰 Prestamos App</div>
+
+<div id="app" class="container">
+    <!-- Aquí se renderiza el contenido dinámico -->
+</div>
+
+<div class="tab-bar">
+    <div class="tab" data-tab="dashboard">📊 Dashboard</div>
+    <div class="tab" data-tab="clientes">👥 Clientes</div>
+    <div class="tab" data-tab="prestamos">🆕 Préstamo</div>
+    <div class="tab" data-tab="abonos">💸 Abonar</div>
+    <div class="tab" data-tab="reportes">📄 Reportes</div>
+</div>
+
+<script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbyAmZ3V4ugCueCpI7KtZmTrn4GzH-qZjSoU7FXzKr2_lOHqE__wuyll9haIhizvKF4/exec"; // 🔴 CAMBIA ESTO
+    
+    let currentTab = "dashboard";
+    let clientes = [];
+    
+    async function callAPI(accion, datos = {}) {
+        try {
+            const response = await fetch(API_URL, {
+                method: "POST",
+                mode: "no-cors", // ⚠️ temporal para pruebas sin CORS
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ accion, ...datos })
+            });
+            return { exito: true };
+        } catch(e) {
+            console.error(e);
+            return { exito: false, error: e.message };
+        }
+    }
+    
+    async function cargarClientes() {
+        // Simulación (luego conectas con GET real)
+        clientes = [
+            { id: 1, nombre: "Juan Pérez", telefono: "573001234567" },
+            { id: 2, nombre: "María López", telefono: "573002345678" }
+        ];
+        render();
+    }
+    
+    function render() {
+        const app = document.getElementById("app");
+        if (currentTab === "dashboard") {
+            app.innerHTML = `
+                <div class="card">
+                    <div>💰 Dinero disponible</div>
+                    <div class="dashboard-number">$5,200,000</div>
+                </div>
+                <div class="card">
+                    <div>🏦 Dinero en la calle</div>
+                    <div class="dashboard-number">$3,450,000</div>
+                </div>
+                <div class="card">
+                    <div>📈 Rendimiento del negocio</div>
+                    <div class="dashboard-number">+$890,000</div>
+                </div>
+            `;
+        } else if (currentTab === "clientes") {
+            app.innerHTML = `
+                <div class="card">
+                    <input type="text" id="nombre" class="input" placeholder="Nombre completo">
+                    <input type="tel" id="telefono" class="input" placeholder="Teléfono (ej: 573001234567)">
+                    <button class="btn" id="btnGuardarCliente">➕ Registrar cliente</button>
+                </div>
+                <div class="card">
+                    <h3>📋 Clientes registrados</h3>
+                    ${clientes.map(c => `
+                        <div style="margin: 12px 0;">
+                            <strong>${c.nombre}</strong><br>
+                            📞 ${c.telefono}
+                            <a href="https://wa.me/${c.telefono}" target="_blank">
+                                <button class="btn btn-wsp" style="margin-top: 5px;">💬 WhatsApp</button>
+                            </a>
+                        </div>
+                        <hr>
+                    `).join('')}
+                </div>
+            `;
+            document.getElementById("btnGuardarCliente")?.addEventListener("click", () => {
+                const nombre = document.getElementById("nombre").value;
+                const telefono = document.getElementById("telefono").value;
+                if(nombre && telefono) {
+                    callAPI("registrarCliente", { nombre, telefono });
+                    alert("Cliente registrado (simulado)");
+                    cargarClientes();
+                }
+            });
+        } else if (currentTab === "prestamos") {
+            app.innerHTML = `
+                <div class="card">
+                    <select id="cliente" class="input">
+                        <option>Selecciona cliente</option>
+                        ${clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('')}
+                    </select>
+                    <input type="number" id="monto" class="input" placeholder="Monto del préstamo">
+                    <input type="number" id="tasa" class="input" placeholder="Tasa % mensual">
+                    <input type="number" id="plazo" class="input" placeholder="Número de cuotas">
+                    <select id="tipoInteres" class="input">
+                        <option value="simple">Interés Simple</option>
+                        <option value="compuesto">Interés Compuesto</option>
+                    </select>
+                    <button class="btn" id="btnNuevoPrestamo">✅ Registrar préstamo</button>
+                </div>
+                <div class="card">
+                    <h3>📊 Simulador rápido</h3>
+                    <button class="btn" id="btnSimular">🔎 Simular cuota</button>
+                    <div id="simulacionResultado"></div>
+                </div>
+            `;
+            document.getElementById("btnNuevoPrestamo")?.addEventListener("click", () => {
+                alert("Préstamo registrado (demo)");
+            });
+            document.getElementById("btnSimular")?.addEventListener("click", () => {
+                const monto = parseFloat(document.getElementById("monto").value);
+                const tasa = parseFloat(document.getElementById("tasa").value) / 100;
+                const cuotas = parseInt(document.getElementById("plazo").value);
+                if(monto && tasa && cuotas) {
+                    const cuota = (monto * tasa * Math.pow(1+tasa, cuotas)) / (Math.pow(1+tasa, cuotas)-1);
+                    document.getElementById("simulacionResultado").innerHTML = `<div style="margin-top:12px;">💰 Cuota estimada: $${cuota.toFixed(2)}</div>`;
+                }
+            });
+        } else if (currentTab === "abonos") {
+            app.innerHTML = `
+                <div class="card">
+                    <select id="prestamoAbono" class="input">
+                        <option>Selecciona préstamo</option>
+                    </select>
+                    <input type="number" id="montoAbono" class="input" placeholder="Monto a abonar">
+                    <select id="destinoAbono" class="input">
+                        <option value="capital">Solo a capital</option>
+                        <option value="intereses">Solo a intereses</option>
+                        <option value="ambos">Capital + intereses</option>
+                    </select>
+                    <button class="btn" id="btnAbonar">💵 Realizar abono</button>
+                </div>
+            `;
+        } else if (currentTab === "reportes") {
+            app.innerHTML = `
+                <div class="card">
+                    <button class="btn" id="btnPdfFactura">📄 Generar factura PDF</button>
+                    <button class="btn" id="btnPdfAmortizacion">📊 Tabla amortización PDF</button>
+                    <button class="btn" id="btnPdfCuotas">📋 Listado de cuotas PDF</button>
+                </div>
+            `;
+            document.getElementById("btnPdfFactura")?.addEventListener("click", () => alert("PDF generado (demo)"));
+            document.getElementById("btnPdfAmortizacion")?.addEventListener("click", () => alert("PDF generado"));
+            document.getElementById("btnPdfCuotas")?.addEventListener("click", () => alert("PDF generado"));
+        }
+    }
+    
+    document.querySelectorAll(".tab").forEach(tab => {
+        tab.addEventListener("click", (e) => {
+            currentTab = e.currentTarget.dataset.tab;
+            document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+            e.currentTarget.classList.add("active");
+            render();
+        });
+    });
+    
+    cargarClientes();
+</script>
+</body>
+</html>
