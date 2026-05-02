@@ -13,7 +13,7 @@
         .container { padding: 16px; }
         .card { background: white; border-radius: 20px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .btn { background: #1e3a5f; color: white; border: none; padding: 12px 20px; border-radius: 40px; font-size: 16px; width: 100%; margin-top: 8px; cursor: pointer; }
-        .btn-small { background: #1e3a5f; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-size: 14px; cursor: pointer; margin: 4px; }
+        .btn-small { background: #1e3a5f; color: white; border: none; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; margin: 4px; }
         .btn-danger { background: #dc3545; }
         .btn-warning { background: #ffc107; color: #333; }
         .btn-wsp { background: #25D366; }
@@ -24,16 +24,15 @@
         .tab.active { color: #1e3a5f; font-weight: bold; border-top: 3px solid #1e3a5f; }
         .dashboard-number { font-size: 28px; font-weight: bold; margin: 8px 0; }
         .loading { text-align: center; padding: 40px; color: #666; }
-        .error { background: #ffebee; color: #c62828; padding: 12px; border-radius: 12px; margin: 12px 0; }
         .cliente-item, .prestamo-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s; }
         .cliente-item:hover, .prestamo-item:hover { background: #f0f0f0; }
         .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-        .modal-content { background: white; border-radius: 20px; padding: 20px; width: 90%; max-width: 400px; max-height: 80vh; overflow-y: auto; }
-        .cuota { display: grid; grid-template-columns: 50px 1fr 1fr 1fr; gap: 8px; padding: 8px; border-bottom: 1px solid #eee; font-size: 12px; }
+        .modal-content { background: white; border-radius: 20px; padding: 20px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+        .cuota { display: grid; grid-template-columns: 50px 1fr 1fr 1fr 1fr; gap: 8px; padding: 8px; border-bottom: 1px solid #eee; font-size: 12px; }
         .cuota-header { font-weight: bold; background: #f0f0f0; border-radius: 8px; }
         .pagada { background: #d4edda; color: #155724; }
         .pendiente { background: #fff3cd; color: #856404; }
-        @media (max-width: 600px) { .container { padding: 12px; } }
+        @media (max-width: 600px) { .container { padding: 12px; } .cuota { font-size: 10px; gap: 4px; } }
     </style>
 </head>
 <body>
@@ -44,53 +43,36 @@
 </div>
 
 <div class="tab-bar">
-    <div class="tab" data-tab="dashboard">📊 Dashboard</div>
+    <div class="tab active" data-tab="dashboard">📊 Dashboard</div>
     <div class="tab" data-tab="clientes">👥 Clientes</div>
     <div class="tab" data-tab="prestamos">🆕 Préstamo</div>
     <div class="tab" data-tab="abonos">💸 Abonar</div>
     <div class="tab" data-tab="simulador">📊 Simular</div>
 </div>
 
+<script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
 <script>
-    // 🔴 CAMBIA ESTA URL POR LA DE TU GOOGLE APPS SCRIPT
-    const API_URL = "https://cors-anywhere.herokuapp.com/https://script.google.com/macros/s/AKfycbxj7_cLQpLGyg1WdJhO2bnRX-iInCTzV9eehBObanUtkUsyFY8nH3-R3bQD5rbhZVu3/exec";
+    // ==================== CONFIGURAR BASE DE DATOS LOCAL ====================
+    const db = new Dexie('PrestamosDB');
+    
+    db.version(1).stores({
+        clientes: '++id, nombre, telefono, email, fechaRegistro',
+        prestamos: '++id, idCliente, monto, tasa, plazo, tipoInteres, fechaInicio, saldoCapital, saldoIntereses, estado, fechaUltimoCalculo',
+        cuotas: '++id, idPrestamo, numero, fechaVencimiento, montoCuota, capital, intereses, pagado, fechaPago',
+        abonos: '++id, idPrestamo, fecha, monto, destino, saldoCapitalRestante, saldoInteresesRestante'
+    });
     
     let currentTab = "dashboard";
     let clientes = [];
     let prestamos = [];
-    let dashboardData = { dineroDisponible: 0, dineroEnCalle: 0, rendimiento: 0 };
-    let selectedCliente = null;
     
-    async function callAPI(accion, datos = {}) {
-        try {
-            const response = await fetch(API_URL, {
-                method: "POST",
-                mode: "cors",  // Cambiado de 'no-cors' a 'cors'
-                headers: { 
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                },
-                body: JSON.stringify({ accion, ...datos })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const resultado = await response.json();
-            if (resultado.error) {
-                throw new Error(resultado.error);
-            }
-            return resultado;
-        } catch(e) {
-            console.error("Error API:", e);
-            mostrarMensaje("Error de conexión: " + e.message, "error");
-            return { exito: false, error: e.message };
-        }
+    async function cargarDatos() {
+        clientes = await db.clientes.toArray();
+        prestamos = await db.prestamos.toArray();
+        render();
     }
     
     function mostrarMensaje(texto, tipo = "exito") {
-        const app = document.getElementById("app");
         const msgDiv = document.createElement("div");
         msgDiv.style.cssText = `position:fixed; top:70px; left:50%; transform:translateX(-50%); background:${tipo === "exito" ? "#4caf50" : "#f44336"}; color:white; padding:12px 20px; border-radius:40px; z-index:1000; box-shadow:0 2px 10px rgba(0,0,0,0.2);`;
         msgDiv.innerHTML = tipo === "exito" ? `✅ ${texto}` : `❌ ${texto}`;
@@ -98,92 +80,191 @@
         setTimeout(() => msgDiv.remove(), 3000);
     }
     
-    async function cargarDashboard() {
-        const res = await callAPI("getDashboard");
-        if (res && !res.error) {
-            dashboardData = res;
-        }
-        render();
-    }
-    
-    async function cargarClientes() {
-        const res = await callAPI("getClientes");
-        if (res && res.clientes) {
-            clientes = res.clientes;
-        }
-        render();
-    }
-    
-    async function cargarPrestamos() {
-        const res = await callAPI("getPrestamos");
-        if (res && res.prestamos) {
-            prestamos = res.prestamos;
-        }
-        render();
-    }
-    
+    // ==================== CLIENTES ====================
     async function registrarCliente(nombre, telefono, email = "") {
-        const res = await callAPI("registrarCliente", { nombre, telefono, email });
-        if (res && res.exito) {
-            mostrarMensaje(`Cliente ${nombre} registrado`);
-            await cargarClientes();
-            return true;
-        }
-        mostrarMensaje("Error al registrar cliente", "error");
-        return false;
+        const id = await db.clientes.add({
+            nombre, telefono, email,
+            fechaRegistro: new Date()
+        });
+        mostrarMensaje(`Cliente ${nombre} registrado`);
+        await cargarDatos();
+        return id;
     }
     
     async function actualizarCliente(id, nombre, telefono, email) {
-        const res = await callAPI("actualizarCliente", { id, nombre, telefono, email });
-        if (res && res.exito) {
-            mostrarMensaje("Cliente actualizado");
-            await cargarClientes();
-            return true;
-        }
-        mostrarMensaje("Error al actualizar", "error");
-        return false;
+        await db.clientes.update(id, { nombre, telefono, email });
+        mostrarMensaje("Cliente actualizado");
+        await cargarDatos();
     }
     
     async function eliminarCliente(id) {
-        if (!confirm("¿Eliminar este cliente? Se eliminarán también sus préstamos")) return;
-        const res = await callAPI("eliminarCliente", { id });
-        if (res && res.exito) {
-            mostrarMensaje("Cliente eliminado");
-            await cargarClientes();
-            return true;
+        if (!confirm("¿Eliminar este cliente? También se eliminarán sus préstamos")) return;
+        
+        // Eliminar préstamos del cliente
+        const prestamosCliente = prestamos.filter(p => p.idCliente === id);
+        for (const p of prestamosCliente) {
+            await db.cuotas.where('idPrestamo').equals(p.id).delete();
+            await db.abonos.where('idPrestamo').equals(p.id).delete();
+            await db.prestamos.delete(p.id);
         }
-        mostrarMensaje("Error al eliminar", "error");
-        return false;
+        
+        await db.clientes.delete(id);
+        mostrarMensaje("Cliente eliminado");
+        await cargarDatos();
     }
     
-    async function nuevoPrestamo(datos) {
-        const res = await callAPI("nuevoPrestamo", datos);
-        if (res && res.exito) {
-            mostrarMensaje(`Préstamo #${res.idPrestamo} registrado`);
-            await cargarPrestamos();
-            await cargarDashboard();
-            return true;
+    // ==================== PRÉSTAMOS ====================
+    function calcularCuota(monto, tasa, cuotas, tipo) {
+        const tasaMensual = tasa / 100;
+        if (tipo === "compuesto") {
+            return (monto * tasaMensual * Math.pow(1 + tasaMensual, cuotas)) / (Math.pow(1 + tasaMensual, cuotas) - 1);
+        } else {
+            return monto / cuotas;
         }
-        mostrarMensaje("Error al registrar préstamo", "error");
-        return false;
+    }
+    
+    async function nuevoPrestamo(idCliente, monto, tasa, plazo, tipoInteres) {
+        const id = await db.prestamos.add({
+            idCliente, monto, tasa, plazo, tipoInteres,
+            fechaInicio: new Date(),
+            saldoCapital: monto,
+            saldoIntereses: 0,
+            estado: "ACTIVO",
+            fechaUltimoCalculo: new Date()
+        });
+        
+        // Generar tabla de amortización
+        const tasaMensual = tasa / 100;
+        let saldo = monto;
+        let cuotaMensual;
+        
+        if (tipoInteres === "compuesto") {
+            cuotaMensual = (monto * tasaMensual * Math.pow(1 + tasaMensual, plazo)) / (Math.pow(1 + tasaMensual, plazo) - 1);
+        } else {
+            cuotaMensual = monto / plazo;
+        }
+        
+        for (let i = 1; i <= plazo; i++) {
+            let interes, capital;
+            if (tipoInteres === "compuesto") {
+                interes = saldo * tasaMensual;
+                capital = cuotaMensual - interes;
+                saldo -= capital;
+            } else {
+                interes = monto * tasaMensual;
+                capital = cuotaMensual;
+                saldo -= capital;
+            }
+            
+            const fechaVencimiento = new Date();
+            fechaVencimiento.setMonth(fechaVencimiento.getMonth() + i);
+            
+            await db.cuotas.add({
+                idPrestamo: id,
+                numero: i,
+                fechaVencimiento,
+                montoCuota: cuotaMensual,
+                capital,
+                intereses: interes,
+                pagado: "NO",
+                fechaPago: null
+            });
+        }
+        
+        mostrarMensaje(`Préstamo de $${monto.toLocaleString()} registrado`);
+        await cargarDatos();
+        return id;
     }
     
     async function registrarAbono(idPrestamo, monto, destino) {
-        const res = await callAPI("registrarAbono", { idPrestamo, monto, destino });
-        if (res && res.exito) {
-            mostrarMensaje(`Abono de $${monto} registrado`);
-            await cargarPrestamos();
-            await cargarDashboard();
-            return true;
+        const prestamo = await db.prestamos.get(idPrestamo);
+        if (!prestamo) {
+            mostrarMensaje("Préstamo no encontrado", "error");
+            return;
         }
-        mostrarMensaje("Error al registrar abono", "error");
-        return false;
+        
+        let saldoCapital = prestamo.saldoCapital;
+        let saldoIntereses = prestamo.saldoIntereses;
+        let montoRestante = monto;
+        
+        if (destino === "intereses" || destino === "ambos") {
+            const aIntereses = Math.min(montoRestante, saldoIntereses);
+            saldoIntereses -= aIntereses;
+            montoRestante -= aIntereses;
+        }
+        
+        if (destino === "capital" || destino === "ambos") {
+            const aCapital = Math.min(montoRestante, saldoCapital);
+            saldoCapital -= aCapital;
+            montoRestante -= aCapital;
+        }
+        
+        await db.prestamos.update(idPrestamo, {
+            saldoCapital, saldoIntereses,
+            estado: (saldoCapital === 0 && saldoIntereses === 0) ? "CANCELADO" : "ACTIVO"
+        });
+        
+        await db.abonos.add({
+            idPrestamo, fecha: new Date(), monto, destino,
+            saldoCapitalRestante: saldoCapital,
+            saldoInteresesRestante: saldoIntereses
+        });
+        
+        mostrarMensaje(`Abono de $${monto.toLocaleString()} registrado`);
+        await cargarDatos();
     }
     
-    function getPrestamosByCliente(idCliente) {
-        return prestamos.filter(p => p.idCliente == idCliente);
+    async function actualizarIntereses() {
+        const hoy = new Date();
+        let actualizados = 0;
+        
+        for (const prestamo of prestamos) {
+            if (prestamo.estado !== "ACTIVO") continue;
+            
+            const fechaUltimo = prestamo.fechaUltimoCalculo ? new Date(prestamo.fechaUltimoCalculo) : new Date(prestamo.fechaInicio);
+            const diasDiff = Math.floor((hoy - fechaUltimo) / (1000 * 60 * 60 * 24));
+            
+            if (diasDiff <= 0) continue;
+            
+            const mesesDiff = diasDiff / 30;
+            let interesesGenerados = 0;
+            
+            if (prestamo.tipoInteres === "simple") {
+                interesesGenerados = prestamo.saldoCapital * (prestamo.tasa / 100) * mesesDiff;
+            } else {
+                interesesGenerados = prestamo.saldoCapital * (Math.pow(1 + prestamo.tasa / 100, mesesDiff) - 1);
+            }
+            
+            await db.prestamos.update(prestamo.id, {
+                saldoIntereses: prestamo.saldoIntereses + interesesGenerados,
+                fechaUltimoCalculo: hoy
+            });
+            actualizados++;
+        }
+        
+        if (actualizados > 0) {
+            mostrarMensaje(`Intereses actualizados para ${actualizados} préstamo(s)`);
+            await cargarDatos();
+        } else {
+            mostrarMensaje("No hay intereses pendientes");
+        }
     }
     
+    function getDashboard() {
+        let dineroEnCalle = 0;
+        let rendimiento = 0;
+        
+        for (const p of prestamos) {
+            if (p.estado === "ACTIVO") {
+                dineroEnCalle += p.saldoCapital;
+                rendimiento += p.saldoIntereses;
+            }
+        }
+        
+        return { dineroDisponible: 5000000, dineroEnCalle, rendimiento };
+    }
+    
+    // ==================== MODALES ====================
     function showClienteModal(cliente = null) {
         const isEdit = cliente !== null;
         const modal = document.createElement("div");
@@ -221,7 +302,6 @@
             document.getElementById("btnEliminarEdit").onclick = async () => {
                 await eliminarCliente(cliente.id);
                 modal.remove();
-                selectedCliente = null;
             };
         }
         
@@ -229,7 +309,7 @@
     }
     
     function showPrestamosCliente(cliente) {
-        const prestamosCliente = getPrestamosByCliente(cliente.id);
+        const prestamosCliente = prestamos.filter(p => p.idCliente === cliente.id);
         const modal = document.createElement("div");
         modal.className = "modal";
         modal.innerHTML = `
@@ -259,10 +339,11 @@
         document.getElementById("btnCerrarPrestamos").onclick = () => modal.remove();
     }
     
-    function showDetallePrestamo(idPrestamo) {
-        const prestamo = prestamos.find(p => p.id == idPrestamo);
+    async function showDetallePrestamo(idPrestamo) {
+        const prestamo = prestamos.find(p => p.id === idPrestamo);
         if (!prestamo) return;
-        const cliente = clientes.find(c => c.id == prestamo.idCliente);
+        const cliente = clientes.find(c => c.id === prestamo.idCliente);
+        const cuotas = await db.cuotas.where('idPrestamo').equals(idPrestamo).toArray();
         
         const modal = document.createElement("div");
         modal.className = "modal";
@@ -272,9 +353,25 @@
                 <div><strong>Cliente:</strong> ${cliente?.nombre}</div>
                 <div><strong>Monto:</strong> $${prestamo.monto?.toLocaleString()}</div>
                 <div><strong>Saldo Capital:</strong> $${prestamo.saldoCapital?.toLocaleString()}</div>
-                <div><strong>Tasa:</strong> ${prestamo.tasa}%</div>
+                <div><strong>Intereses pendientes:</strong> $${prestamo.saldoIntereses?.toLocaleString()}</div>
+                <div><strong>Tasa:</strong> ${prestamo.tasa}% mensual</div>
                 <div><strong>Tipo:</strong> ${prestamo.tipoInteres}</div>
                 <div><strong>Estado:</strong> ${prestamo.estado}</div>
+                <hr>
+                <h4>📅 Cuotas</h4>
+                <div class="cuota cuota-header">
+                    <div>#</div><div>Vencimiento</div><div>Cuota</div><div>Estado</div>
+                </div>
+                <div style="max-height:300px; overflow-y:auto;">
+                    ${cuotas.map(c => `
+                        <div class="cuota ${c.pagado === 'SI' ? 'pagada' : 'pendiente'}">
+                            <div>${c.numero}</div>
+                            <div><small>${new Date(c.fechaVencimiento).toLocaleDateString()}</small></div>
+                            <div>$${c.montoCuota.toFixed(2)}</div>
+                            <div>${c.pagado === 'SI' ? '✅ Pagada' : '⏳ Pendiente'}</div>
+                        </div>
+                    `).join('')}
+                </div>
                 <button class="btn" id="btnCerrarDetalle">Cerrar</button>
             </div>
         `;
@@ -282,114 +379,58 @@
         document.getElementById("btnCerrarDetalle").onclick = () => modal.remove();
     }
     
-    function showSimulador() {
-        const modal = document.createElement("div");
-        modal.className = "modal";
-        modal.innerHTML = `
-            <div class="modal-content">
-                <h3>📊 Simulador de Crédito</h3>
-                <input type="number" id="simMonto" class="input" placeholder="Monto">
-                <input type="number" id="simTasa" class="input" placeholder="Tasa % mensual" step="0.1">
-                <input type="number" id="simPlazo" class="input" placeholder="Número de cuotas">
-                <select id="simTipo" class="input">
-                    <option value="simple">Interés Simple</option>
-                    <option value="compuesto">Interés Compuesto</option>
-                </select>
-                <button class="btn" id="btnCalcularSimulacion">Calcular</button>
-                <div id="simResultado"></div>
-                <button class="btn" id="btnCerrarSimulador">Cerrar</button>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        
-        document.getElementById("btnCalcularSimulacion").onclick = () => {
-            const monto = parseFloat(document.getElementById("simMonto").value);
-            const tasa = parseFloat(document.getElementById("simTasa").value) / 100;
-            const cuotas = parseInt(document.getElementById("simPlazo").value);
-            const tipo = document.getElementById("simTipo").value;
-            
-            if (!monto || !tasa || !cuotas) {
-                alert("Completa todos los campos");
-                return;
-            }
-            
-            let cuotaMensual;
-            let totalIntereses = 0;
-            let tabla = [];
-            let saldo = monto;
-            
-            if (tipo === "compuesto") {
-                cuotaMensual = (monto * tasa * Math.pow(1 + tasa, cuotas)) / (Math.pow(1 + tasa, cuotas) - 1);
-                for (let i = 1; i <= cuotas; i++) {
-                    const interes = saldo * tasa;
-                    const capital = cuotaMensual - interes;
-                    saldo -= capital;
-                    totalIntereses += interes;
-                    tabla.push({ nro: i, cuota: cuotaMensual, capital, interes, saldo: Math.abs(saldo) });
-                }
-            } else {
-                const capitalFijo = monto / cuotas;
-                for (let i = 1; i <= cuotas; i++) {
-                    const interes = monto * tasa;
-                    const cuota = capitalFijo + interes;
-                    totalIntereses += interes;
-                    tabla.push({ nro: i, cuota, capital: capitalFijo, interes, saldo: monto - (capitalFijo * i) });
-                }
-            }
-            
-            document.getElementById("simResultado").innerHTML = `
-                <div style="margin-top:16px; padding:12px; background:#e3f2fd; border-radius:12px;">
-                    <strong>💰 Cuota mensual: $${cuotaMensual?.toFixed(2) || tabla[0]?.cuota.toFixed(2)}</strong><br>
-                    <strong>📊 Total a pagar: $${(tabla.reduce((sum, t) => sum + t.cuota, 0)).toFixed(2)}</strong><br>
-                    <strong>💸 Total intereses: $${totalIntereses.toFixed(2)}</strong>
-                </div>
-                <div style="max-height:300px; overflow-y:auto; margin-top:12px;">
-                    <div class="cuota cuota-header">
-                        <div>#</div><div>Cuota</div><div>Capital</div><div>Interés</div>
-                    </div>
-                    ${tabla.map(t => `
-                        <div class="cuota">
-                            <div>${t.nro}</div>
-                            <div>$${t.cuota.toFixed(2)}</div>
-                            <div>$${t.capital.toFixed(2)}</div>
-                            <div>$${t.interes.toFixed(2)}</div>
-                        </div>
-                    `).join("")}
-                </div>
-            `;
-        };
-        
-        document.getElementById("btnCerrarSimulador").onclick = () => modal.remove();
-    }
-    
+    // ==================== RENDER ====================
     function render() {
         const app = document.getElementById("app");
+        const dashboard = getDashboard();
         
         if (currentTab === "dashboard") {
             app.innerHTML = `
                 <div class="card">
                     <div>💰 Dinero disponible</div>
-                    <div class="dashboard-number">$${(dashboardData.dineroDisponible || 0).toLocaleString()}</div>
+                    <div class="dashboard-number">$${dashboard.dineroDisponible.toLocaleString()}</div>
                 </div>
                 <div class="card">
                     <div>🏦 Dinero en la calle</div>
-                    <div class="dashboard-number">$${(dashboardData.dineroEnCalle || 0).toLocaleString()}</div>
+                    <div class="dashboard-number">$${dashboard.dineroEnCalle.toLocaleString()}</div>
                 </div>
                 <div class="card">
                     <div>📈 Rendimiento del negocio</div>
-                    <div class="dashboard-number">+$${(dashboardData.rendimiento || 0).toLocaleString()}</div>
+                    <div class="dashboard-number">+$${dashboard.rendimiento.toLocaleString()}</div>
                 </div>
                 <div class="card">
                     <button class="btn" id="btnActualizarIntereses">🔄 Actualizar intereses</button>
+                    <button class="btn" id="btnExportarDatos" style="background:#6c757d;">📤 Exportar respaldo</button>
+                    <input type="file" id="btnImportarDatos" accept=".json" style="display:none;">
+                    <button class="btn" id="btnImportarBtn" style="background:#6c757d;">📥 Importar respaldo</button>
                 </div>
             `;
-            document.getElementById("btnActualizarIntereses")?.addEventListener("click", async () => {
-                await callAPI("actualizarIntereses");
-                mostrarMensaje("Intereses actualizados");
-                await cargarDashboard();
-                await cargarPrestamos();
+            document.getElementById("btnActualizarIntereses")?.addEventListener("click", actualizarIntereses);
+            document.getElementById("btnExportarDatos")?.addEventListener("click", async () => {
+                const data = { clientes, prestamos, cuotas: await db.cuotas.toArray(), abonos: await db.abonos.toArray() };
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+                link.download = `prestamos_backup_${new Date().toISOString().split('T')[0]}.json`;
+                link.click();
+                mostrarMensaje("Respaldo exportado");
             });
-            
+            document.getElementById("btnImportarBtn")?.addEventListener("click", () => document.getElementById("btnImportarDatos").click());
+            document.getElementById("btnImportarDatos")?.addEventListener("change", async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = async (ev) => {
+                        const data = JSON.parse(ev.target.result);
+                        await db.clientes.bulkPut(data.clientes);
+                        await db.prestamos.bulkPut(data.prestamos);
+                        await db.cuotas.bulkPut(data.cuartas);
+                        await db.abonos.bulkPut(data.abonos);
+                        mostrarMensaje("Datos importados");
+                        await cargarDatos();
+                    };
+                    reader.readAsText(file);
+                }
+            });
         } else if (currentTab === "clientes") {
             app.innerHTML = `
                 <div class="card">
@@ -401,32 +442,35 @@
                     ${clientes.map(c => `
                         <div class="cliente-item" data-id="${c.id}">
                             <strong>${c.nombre}</strong><br>
-                            📞 ${c.telefono} ${c.email ? `| ✉️ ${c.email}` : ""}<br>
-                            <small>ID: ${c.id}</small>
+                            📞 ${c.telefono} ${c.email ? `| ✉️ ${c.email}` : ""}
                             <div style="margin-top:8px;">
                                 <button class="btn-small btn-warning btnEditar" data-id="${c.id}">✏️ Editar</button>
-                                <button class="btn-small btnVerPrestamos" data-id="${c.id}">📋 Ver préstamos</button>
+                                <button class="btn-small btnVerPrestamos" data-id="${c.id}">📋 Préstamos</button>
+                                <a href="https://wa.me/${c.telefono}" target="_blank">
+                                    <button class="btn-small btn-wsp">💬 WhatsApp</button>
+                                </a>
                             </div>
                         </div>
                     `).join('')}
                 </div>
             `;
-            
             document.getElementById("btnNuevoCliente")?.addEventListener("click", () => showClienteModal());
-            
-            document.querySelectorAll(".cliente-item").forEach(el => {
-                const id = parseInt(el.dataset.id);
-                const cliente = clientes.find(c => c.id === id);
-                el.querySelector(".btnEditar")?.addEventListener("click", (e) => {
+            document.querySelectorAll(".btnEditar").forEach(btn => {
+                btn.addEventListener("click", (e) => {
                     e.stopPropagation();
+                    const id = parseInt(btn.dataset.id);
+                    const cliente = clientes.find(c => c.id === id);
                     showClienteModal(cliente);
                 });
-                el.querySelector(".btnVerPrestamos")?.addEventListener("click", (e) => {
+            });
+            document.querySelectorAll(".btnVerPrestamos").forEach(btn => {
+                btn.addEventListener("click", (e) => {
                     e.stopPropagation();
+                    const id = parseInt(btn.dataset.id);
+                    const cliente = clientes.find(c => c.id === id);
                     showPrestamosCliente(cliente);
                 });
             });
-            
         } else if (currentTab === "prestamos") {
             app.innerHTML = `
                 <div class="card">
@@ -445,32 +489,23 @@
                     <button class="btn" id="btnNuevoPrestamo">✅ Registrar préstamo</button>
                 </div>
             `;
-            
             document.getElementById("btnNuevoPrestamo")?.addEventListener("click", async () => {
-                const idCliente = document.getElementById("clienteSelect").value;
-                const monto = document.getElementById("monto").value;
-                const tasa = document.getElementById("tasa").value;
-                const plazo = document.getElementById("plazo").value;
+                const idCliente = parseInt(document.getElementById("clienteSelect").value);
+                const monto = parseFloat(document.getElementById("monto").value);
+                const tasa = parseFloat(document.getElementById("tasa").value);
+                const plazo = parseInt(document.getElementById("plazo").value);
                 const tipoInteres = document.getElementById("tipoInteres").value;
                 
-                if(!idCliente || !monto || !tasa || !plazo) {
+                if (!idCliente || !monto || !tasa || !plazo) {
                     mostrarMensaje("Completa todos los campos", "error");
                     return;
                 }
                 
-                await nuevoPrestamo({
-                    idCliente: parseInt(idCliente),
-                    monto: parseFloat(monto),
-                    tasa: parseFloat(tasa),
-                    plazo: parseInt(plazo),
-                    tipoInteres: tipoInteres
-                });
-                
+                await nuevoPrestamo(idCliente, monto, tasa, plazo, tipoInteres);
                 document.getElementById("monto").value = "";
                 document.getElementById("tasa").value = "";
                 document.getElementById("plazo").value = "";
             });
-            
         } else if (currentTab === "abonos") {
             const prestamosActivos = prestamos.filter(p => p.estado === "ACTIVO" && p.saldoCapital > 0);
             app.innerHTML = `
@@ -492,21 +527,19 @@
                     <button class="btn" id="btnAbonar">💵 Realizar abono</button>
                 </div>
             `;
-            
             document.getElementById("btnAbonar")?.addEventListener("click", async () => {
-                const idPrestamo = document.getElementById("prestamoAbono").value;
-                const monto = document.getElementById("montoAbono").value;
+                const idPrestamo = parseInt(document.getElementById("prestamoAbono").value);
+                const monto = parseFloat(document.getElementById("montoAbono").value);
                 const destino = document.getElementById("destinoAbono").value;
                 
-                if(!idPrestamo || !monto || monto <= 0) {
+                if (!idPrestamo || !monto || monto <= 0) {
                     mostrarMensaje("Selecciona un préstamo y escribe un monto válido", "error");
                     return;
                 }
                 
-                await registrarAbono(parseInt(idPrestamo), parseFloat(monto), destino);
+                await registrarAbono(idPrestamo, monto, destino);
                 document.getElementById("montoAbono").value = "";
             });
-            
         } else if (currentTab === "simulador") {
             app.innerHTML = `
                 <div class="card">
@@ -583,6 +616,7 @@
         }
     }
     
+    // ==================== INICIALIZAR ====================
     document.querySelectorAll(".tab").forEach(tab => {
         tab.addEventListener("click", (e) => {
             currentTab = e.currentTarget.dataset.tab;
@@ -596,12 +630,7 @@
         navigator.serviceWorker.register('sw.js').catch(err => console.log('SW Error:', err));
     }
     
-    async function init() {
-        await Promise.all([cargarDashboard(), cargarClientes(), cargarPrestamos()]);
-        render();
-    }
-    
-    init();
+    cargarDatos();
 </script>
 </body>
 </html>
