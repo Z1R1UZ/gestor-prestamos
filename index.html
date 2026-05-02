@@ -53,7 +53,7 @@
 
 <script>
     // 🔴 CAMBIA ESTA URL POR LA DE TU GOOGLE APPS SCRIPT
-    const API_URL = "https://script.google.com/macros/s/AKfycbxp6TlP2uvsVerpXLCemWt0fcabrVyAWT-N8a7o1Wa8iMdQkoc-OPoPrnJC0L6Fh8eE/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbyteWKTGwBKiwPjBuAXj0J-MISB8twFyWLNbcHpVec-1goxwHzoNE0BIGaQ-lbOwXny/exec";
     
     let currentTab = "dashboard";
     let clientes = [];
@@ -65,9 +65,18 @@
         try {
             const response = await fetch(API_URL, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                mode: "cors",  // Cambiado de 'no-cors' a 'cors'
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
                 body: JSON.stringify({ accion, ...datos })
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
             const resultado = await response.json();
             if (resultado.error) {
                 throw new Error(resultado.error);
@@ -75,6 +84,7 @@
             return resultado;
         } catch(e) {
             console.error("Error API:", e);
+            mostrarMensaje("Error de conexión: " + e.message, "error");
             return { exito: false, error: e.message };
         }
     }
